@@ -1,13 +1,18 @@
+# converts any original.jpg/original.png into a black and white weight.png with
+# width/height scaled to WIDTH from the weight module
+
 import numpy as np
 from PIL import Image, ImageEnhance
 
 from weight import WIDTH, get_weight
 
+CONTRAST = 4
+
 weight_image = None
 
 def update_image():
   updated_image = weight_image.resize((WIDTH, WIDTH)).convert("LA")
-  contrast_image = ImageEnhance.Contrast(updated_image).enhance(4)
+  contrast_image = ImageEnhance.Contrast(updated_image).enhance(CONTRAST)
   contrast_image.save("weight.png")
 
 
