@@ -24,8 +24,8 @@ ORANGE = (255, 165, 0)
 GREY = (128, 128, 128)
 TURQUOISE = (64, 224, 208)
 
-ROWS = 200
-POS_WIDTH = WIDTH // ROWS
+rows = 320
+pos_width = WIDTH / rows
 
 weight_image = pygame.image.load("weight.png")
 
@@ -37,15 +37,15 @@ font = pygame.font.SysFont("Comic Sans MS", 12)
 
 grid = []
 user_path = []
-start = None
-end = None
+start = (0, 0)
+end = (312, 312)
 
 def draw_pos(pos, color):
   pygame.draw.rect(
     window,
     color,
     # (x, y, width)
-    (pos[0] * POS_WIDTH, pos[1] * POS_WIDTH, POS_WIDTH, POS_WIDTH)
+    (pos[0] * pos_width, pos[1] * pos_width, pos_width, pos_width)
   )
 
 def draw():
@@ -73,21 +73,21 @@ def get_valid_neighbors(pos):
 
   # neighbors are in the form (x, y, is_diagonal)
 
-  if y < ROWS - 1:
+  if y < rows - 1:
     neighbors.append((x, y + 1, False))
-    if x < ROWS - 1:
+    if x < rows - 1:
       neighbors.append((x + 1, y + 1, True))
     if x > 0:
       neighbors.append((x - 1, y + 1, True))
     
   if y > 0:
     neighbors.append((x, y - 1, False))
-    if x < ROWS - 1:
+    if x < rows - 1:
       neighbors.append((x + 1, y - 1, True))
     if x > 0:
       neighbors.append((x - 1, y - 1, True))
 
-  if x < ROWS - 1:
+  if x < rows - 1:
     neighbors.append((x + 1, y, False))
   
   if x > 0:
@@ -128,28 +128,19 @@ def algorithm(start, end, ignore_valid):
 
   scores = { start: distance_to_end(start) }
   
-  weights = { start: get_weight(start, POS_WIDTH) }
+  weights = { start: get_weight(start, pos_width) }
 
   global user_path
-  complete_path = [start, end, *user_path]
-  
-  """
-  for row in grid:
-    for spot in row:
-      spot.reset_visited()
-  """
 
   valid = {}
 
-  for pos in complete_path:
+  for pos in user_path:
     valid[pos] = True
     for x, y, is_diagonal in get_valid_neighbors(pos):
       valid[(x, y)] = True
 
   came_from = {}
   closed = {}
-
-  print(start, end)
 
   while not open_set.empty():
     for event in pygame.event.get():
@@ -179,24 +170,20 @@ def algorithm(start, end, ignore_valid):
         new_score = scores[current] + (1.4 if is_diagonal else 1)
         # may also want to memoize distance_to_end
         new_score += distance_to_end(neighbor) - distance_to_end(current)
-        weights[neighbor] = get_weight(neighbor, POS_WIDTH)
+        weights[neighbor] = get_weight(neighbor, pos_width)
         new_score += max(0, weights[neighbor] - weights[current]) * 100
-        if new_score < old_score:
+        if new_score - old_score < -1e-5:
           came_from[neighbor] = current
           scores[neighbor] = new_score
           count += 1
+          #if (count % 1000 == 0):
+            #print(count / 1000, "thousand")
           open_set.put((scores[neighbor], count, neighbor))
           
-          # text = font.render(str(math.floor(scores[neighbor])), False, (255, 0, 0))
-          # window.blit(text, (neighbor[0] * POS_WIDTH, neighbor[1] * POS_WIDTH))
-          pygame.draw.rect(
-            window,
-            RED,
-            # (x, y, width)
-            (neighbor[0] * POS_WIDTH, neighbor[1] * POS_WIDTH, POS_WIDTH, POS_WIDTH)
-          )
           
-          pygame.display.update()
+          # draw_pos(neighbor, RED)
+          # pygame.display.update()
+          
 
     # draw()
   return False
@@ -209,7 +196,7 @@ def make_grid():
 
 def get_clicked_pos():
   x, y = pygame.mouse.get_pos()
-  return (x // POS_WIDTH, y // POS_WIDTH)
+  return (x // pos_width, y // pos_width)
 
 def main():
   # make_grid()
@@ -258,21 +245,46 @@ def main():
 
       if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_SPACE and start and end:
-          old_length = float("inf")
-          new_length = 0
+          user_path = [start, end, *user_path]
           start_time = time()
           while True:
-            old_length = new_length
-            new_length = algorithm(start, end, False)
+            old_length = float("inf")
+            new_length = 0
+            while True:
+              old_length = new_length
+              new_length = algorithm(start, end, False)
+              draw()
+              if abs(new_length - old_length) < 1e-06:
+                print(new_length)
+                break
             draw()
-            if abs(new_length - old_length) < 1e-06:
+            old_user_path = [start, end, *user_path]
+            user_path = []
+            for old_x, old_y in old_user_path:
+              x, y = old_x * 2, old_y * 2
+              user_path.append((x, y))
+              user_path.append((x + 1, y))
+              user_path.append((x, y + 1))
+              user_path.append((x + 1, y + 1))
+            global pos_width
+            global rows
+            rows *= 2
+            pos_width = WIDTH / rows
+            if pos_width <= 2:
+              print(end)
               break
+            start = (start[0] * 2, start[1] * 2)
+            end = (end[0] * 2, end[1] * 2)
           print("User path took:", time() - start_time)
+
+            
 
         if event.key == pygame.K_TAB and start and end:
           start_time = time()
-          algorithm(start, end, True)
+          length = algorithm(start, end, True)
+          print(length)
           print("A* took:", time() - start_time)
+
           draw() # A* draw
 
         if event.key == pygame.K_c:

@@ -7,7 +7,7 @@ weight_image = None
 
 def update_image():
   updated_image = weight_image.resize((WIDTH, WIDTH)).convert("LA")
-  contrast_image = ImageEnhance.Contrast(updated_image).enhance(2)
+  contrast_image = ImageEnhance.Contrast(updated_image).enhance(4)
   contrast_image.save("weight.png")
 
 
