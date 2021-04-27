@@ -9,6 +9,7 @@ initial grid size should be <= minimum width of all weighted regions
 from time import time, sleep
 from queue import PriorityQueue
 import pygame
+import math
 
 from weight import WIDTH, get_weight
 
@@ -23,13 +24,16 @@ ORANGE = (255, 165, 0)
 GREY = (128, 128, 128)
 TURQUOISE = (64, 224, 208)
 
-ROWS = 50
-SPOT_WIDTH = WIDTH // ROWS
+ROWS = 200
+POS_WIDTH = WIDTH // ROWS
 
 weight_image = pygame.image.load("weight.png")
 
 pygame.display.set_caption("Pathfinding")
 window = pygame.display.set_mode((WIDTH, WIDTH))
+
+pygame.font.init()
+font = pygame.font.SysFont("Comic Sans MS", 12)
 
 grid = []
 user_path = []
@@ -41,7 +45,7 @@ def draw_pos(pos, color):
     window,
     color,
     # (x, y, width)
-    (pos[0] * SPOT_WIDTH, pos[1] * SPOT_WIDTH, SPOT_WIDTH, SPOT_WIDTH)
+    (pos[0] * POS_WIDTH, pos[1] * POS_WIDTH, POS_WIDTH, POS_WIDTH)
   )
 
 def draw():
@@ -51,7 +55,7 @@ def draw():
   if start is not None:
     draw_pos(start, ORANGE)
   if end is not None:
-    draw_pos(start, TURQUOISE)
+    draw_pos(end, TURQUOISE)
   
   """
   # draw grid
@@ -67,31 +71,64 @@ def get_valid_neighbors(pos):
   x, y = pos
   neighbors = []
 
-  if y < ROWS - 1:
-    neighbors.append((x, y + 1))
+  # neighbors are in the form (x, y, is_diagonal)
 
+  if y < ROWS - 1:
+    neighbors.append((x, y + 1, False))
+    if x < ROWS - 1:
+      neighbors.append((x + 1, y + 1, True))
+    if x > 0:
+      neighbors.append((x - 1, y + 1, True))
+    
   if y > 0:
-    neighbors.append((x, y - 1))
+    neighbors.append((x, y - 1, False))
+    if x < ROWS - 1:
+      neighbors.append((x + 1, y - 1, True))
+    if x > 0:
+      neighbors.append((x - 1, y - 1, True))
 
   if x < ROWS - 1:
-    neighbors.append((x + 1, y))
+    neighbors.append((x + 1, y, False))
   
   if x > 0:
-    neighbors.append((x - 1, y))
+    neighbors.append((x - 1, y, False))
 
   return neighbors
+"""
+def get_valid_diagonal_neighbors(pos):
+  x, y = pos
+  neighbors = []
+
+  if y < ROWS - 1:
+    if x < ROWS - 1:
+      neighbors.append((x + 1, y + 1))
+    if x > 0:
+      neighbors.append((x - 1, y + 1))
+
+  if y > 0:
+    if x < ROWS - 1:
+      neighbors.append((x + 1, y - 1))
+    if x > 0:
+      neighbors.append((x - 1, y - 1))
+
+  return neighbors
+"""
 
 def algorithm(start, end, ignore_valid):
   count = 0
   open_set = PriorityQueue()
   open_set.put((0, count, start))
 
-  def h(spot):
-    return abs(end[0] - spot[0]) + abs(end[1] - spot[1])
+  def distance_to_end(pos):
+    if ignore_valid:
+      # return abs(pos[0] - pos[0]) + abs(end[1] - pos[1])
+      return math.sqrt((end[0] - pos[0]) ** 2 + (end[1] - pos[1]) ** 2)
+    else:
+      return 0
 
-  scores = { start: h(start) if ignore_valid else 0 }
-
-  open_set_hash = { start }
+  scores = { start: distance_to_end(start) }
+  
+  weights = { start: get_weight(start, POS_WIDTH) }
 
   global user_path
   complete_path = [start, end, *user_path]
@@ -106,10 +143,13 @@ def algorithm(start, end, ignore_valid):
 
   for pos in complete_path:
     valid[pos] = True
-    for neighbor in get_valid_neighbors(pos):
-      valid[neighbor] = True
+    for x, y, is_diagonal in get_valid_neighbors(pos):
+      valid[(x, y)] = True
 
   came_from = {}
+  closed = {}
+
+  print(start, end)
 
   while not open_set.empty():
     for event in pygame.event.get():
@@ -117,7 +157,10 @@ def algorithm(start, end, ignore_valid):
         pygame.quit()
 
     current = open_set.get()[2]
-    open_set_hash.remove(current)
+    
+    if current in closed:
+      continue
+    closed[current] = True
 
     if current == end:
       user_path = []
@@ -129,17 +172,33 @@ def algorithm(start, end, ignore_valid):
         current = came_from[current]
       return scores[end]
 
-    for neighbor in get_valid_neighbors(current):
-      if neighbor not in scores and (ignore_valid or neighbor in valid):
-        came_from[neighbor] = current
-        scores[neighbor] = scores[current] + (1 + (h(neighbor) if ignore_valid else 0)) + (get_weight(neighbor) - get_weight(current))
-        if neighbor not in open_set_hash:
+    for x, y, is_diagonal in get_valid_neighbors(current):
+      neighbor = (x, y)
+      if neighbor not in closed and (ignore_valid or neighbor in valid):
+        old_score = scores[neighbor] if neighbor in scores else float("inf")
+        new_score = scores[current] + (1.4 if is_diagonal else 1)
+        # may also want to memoize distance_to_end
+        new_score += distance_to_end(neighbor) - distance_to_end(current)
+        weights[neighbor] = get_weight(neighbor, POS_WIDTH)
+        new_score += max(0, weights[neighbor] - weights[current]) * 100
+        if new_score < old_score:
+          came_from[neighbor] = current
+          scores[neighbor] = new_score
           count += 1
           open_set.put((scores[neighbor], count, neighbor))
-          open_set_hash.add(neighbor)
-    
+          
+          # text = font.render(str(math.floor(scores[neighbor])), False, (255, 0, 0))
+          # window.blit(text, (neighbor[0] * POS_WIDTH, neighbor[1] * POS_WIDTH))
+          pygame.draw.rect(
+            window,
+            RED,
+            # (x, y, width)
+            (neighbor[0] * POS_WIDTH, neighbor[1] * POS_WIDTH, POS_WIDTH, POS_WIDTH)
+          )
+          
+          pygame.display.update()
+
     # draw()
-  
   return False
 
 """
@@ -150,7 +209,7 @@ def make_grid():
 
 def get_clicked_pos():
   x, y = pygame.mouse.get_pos()
-  return (x // SPOT_WIDTH, y // SPOT_WIDTH)
+  return (x // POS_WIDTH, y // POS_WIDTH)
 
 def main():
   # make_grid()
@@ -205,9 +264,8 @@ def main():
           while True:
             old_length = new_length
             new_length = algorithm(start, end, False)
-            print(new_length)
             draw()
-            if new_length == old_length:
+            if abs(new_length - old_length) < 1e-06:
               break
           print("User path took:", time() - start_time)
 
@@ -215,7 +273,7 @@ def main():
           start_time = time()
           algorithm(start, end, True)
           print("A* took:", time() - start_time)
-          draw()
+          draw() # A* draw
 
         if event.key == pygame.K_c:
           start = None
