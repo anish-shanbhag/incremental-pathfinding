@@ -201,8 +201,7 @@ def a_star(ignore_valid):
             pygame.event.pump()
           if visualize:
             draw_node(neighbor, RED)
-            if count % 100 == 0:
-              pygame.display.update()
+            pygame.display.update()
 
 def get_clicked_node():
   x, y = pygame.mouse.get_pos()
@@ -212,6 +211,7 @@ def set_node_width(new_node_width, include_start_end):
   global node_width, path, start, end
   # multiplier = node_width / new_node_width
   node_width = new_node_width
+  print("Node width set to", node_width)
 
   # - reconstruct the path using the updated grid size
   #     oo  <-- a single node is split into 4 different ones which fill the
@@ -227,8 +227,8 @@ def set_node_width(new_node_width, include_start_end):
   # repositions a node to the nearest node on the new grid
   def snap_to_grid(node):
     return tuple(node_width * math.ceil(c / node_width) for c in node)
-  start = snap_to_grid(start)
-  end = snap_to_grid(end)
+  start = None if start is None else snap_to_grid(start)
+  end = None if end is None else snap_to_grid(end)
 
   path = set()
   for old_node in old_path:
@@ -237,9 +237,6 @@ def set_node_width(new_node_width, include_start_end):
     path.add((x + node_width, y))
     path.add((x, y + node_width))
     path.add((x + node_width, y + node_width))
-  
-  print(node_width, len(path))
-
 
 def incremental_algorithm():
   # runs the incremental algorithm using an already existing path
